@@ -1,115 +1,65 @@
 #!/bin/bash
 
-# Script de instalação do driver snd-hda-codec-cs8409 para Ubuntu
-# Autor: [Seu Nome]
-# Versão: 1.2
+# Import functions and variables from main script if running standalone
+if [ -z "$BOLD" ]; then
+    BOLD=$(tput bold)
+    RED=$(tput setaf 1)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    BLUE=$(tput setaf 4)
+    GRAY=$(tput setaf 7)
+    RESET=$(tput sgr0)
 
-# Função para verificar comandos essenciais
-check_commands() {
-    for cmd in git make gcc; do
-        if ! command -v $cmd &>/dev/null; then
-            echo "Erro: O comando '$cmd' não está disponível. Tente instalar as dependências manualmente."
-            exit 1
+    ask_confirmation() {
+        local question="$1"
+        echo -e "${YELLOW}${BOLD}${question} (y/n):${RESET}"
+        read -r response
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            echo "${RED}${BOLD}Action skipped by user.${RESET}"
+            return 1
         fi
-    done
-}
+        return 0
+    }
+fi
 
-# Função para checar permissão de sudo
-check_sudo() {
-    if ! sudo -v &>/dev/null; then
-        echo "Erro: Você não tem permissão para usar sudo."
-        exit 1
-    fi
-}
+DOWNLOADS_DIR="$HOME/Downloads"
+DRIVER_DIR="$DOWNLOADS_DIR/snd-hda-codec-cs8409"
 
-# Função para checar conexão com a internet
-check_internet() {
-    if ! ping -c 1 github.com &>/dev/null; then
-        echo "Erro: Sem conexão com a internet. Verifique sua rede."
-        exit 1
-    fi
-}
+echo "${YELLOW}${BOLD}This script will install the snd-hda-codec-cs8409 driver on your Ubuntu system.${RESET}"
+echo "Dependencies will be installed and the driver will be downloaded and compiled in the Downloads folder."
+echo "After installation, the downloaded files will be removed."
+echo "It is recommended to reboot your computer after installation."
+echo
 
-# Função para verificar e instalar dependências
-install_dependencies() {
-    echo "Instalando dependências necessárias..."
-    sudo apt update
-    sudo apt install -y linux-headers-generic build-essential git gcc-12
-    if [ $? -eq 0 ]; then
-        echo "Dependências instaladas com sucesso!"
-    else
-        echo "Erro ao instalar dependências. Verifique sua conexão com a internet."
-        exit 1
-    fi
-}
+if ! ask_confirmation "Do you want to continue?"; then
+    echo "${RED}${BOLD}Installation cancelled.${RESET}"
+    exit 0
+fi
 
-# Função para baixar o driver
-download_driver() {
-    echo "Baixando o driver snd-hda-codec-cs8409..."
-    if [ -d "snd-hda-codec-cs8409" ]; then
-        echo "Diretório snd-hda-codec-cs8409 já existe. Removendo..."
-        rm -rf snd-hda-codec-cs8409
-    fi
-    git clone https://github.com/egorenar/snd-hda-codec-cs8409
-    if [ -d "snd-hda-codec-cs8409" ]; then
-        echo "Driver baixado com sucesso!"
-    else
-        echo "Erro ao baixar o driver. Verifique a URL ou sua conexão com a internet."
-        exit 1
-    fi
-}
+echo "${YELLOW}${BOLD}Installing dependencies...${RESET}"
+sudo apt update
+sudo apt install -y linux-headers-generic build-essential git gcc-12
 
-compile_install() {
-    echo "Compilando e instalando o driver..."
-    cd snd-hda-codec-cs8409 || { echo "Erro ao acessar o diretório do driver."; exit 1; }
-    make
-    if [ $? -eq 0 ]; then
-        sudo make install
-        if [ $? -eq 0 ]; then
-            echo "Driver instalado com sucesso!"
-        else
-            echo "Erro durante a instalação."
-            exit 1
-        fi
-    else
-        echo "Erro durante a compilação. Verifique as dependências."
-        exit 1
-    fi
-    cd ..
-    # rm -rf snd-hda-codec-cs8409 # Descomente se quiser remover após instalar
-}
+echo "${YELLOW}${BOLD}Downloading the driver to the Downloads folder...${RESET}"
+rm -rf "$DRIVER_DIR"
+git clone https://github.com/egorenar/snd-hda-codec-cs8409 "$DRIVER_DIR"
 
-# Função principal
-main() {
-    echo "Iniciando instalação do driver de áudio snd-hda-codec-cs8409..."
+echo "${YELLOW}${BOLD}Compiling and installing the driver...${RESET}"
+cd "$DRIVER_DIR" || { echo "${RED}${BOLD}Error accessing the driver directory.${RESET}"; exit 1; }
+make
+sudo make install
+cd "$HOME"
 
-    # Verificar se é Ubuntu/Debian
-    if ! grep -qiE 'ubuntu|debian' /etc/os-release; then
-        echo "Aviso: Este script foi projetado para Ubuntu/Debian. Continue por sua conta e risco."
-    fi
+echo "${YELLOW}${BOLD}Cleaning up downloaded files...${RESET}"
+rm -rf "$DRIVER_DIR"
 
-    # Verificar se é root
-    if [ "$EUID" -eq 0 ]; then
-        echo "Erro: Não execute este script como root. Execute como usuário normal."
-        exit 1
-    fi
+echo
+echo "${GREEN}${BOLD}Installation completed!${RESET}"
+if ask_confirmation "Do you want to reboot the computer now?"; then
+    echo "${YELLOW}${BOLD}Rebooting the computer...${RESET}"
+    sudo reboot
+else
+    echo "${YELLOW}Please reboot your computer manually to apply the changes.${RESET}"
+fi
 
-    check_sudo
-    check_commands
-    check_internet
-    install_dependencies
-    download_driver
-    compile_install
-
-    echo ""
-    echo "Instalação concluída com sucesso!"
-    echo "Reinicie seu computador para aplicar as alterações:"
-    echo "sudo reboot"
-    echo ""
-    echo "Após reiniciar, o som deve funcionar normalmente."
-    echo "Se precisar remover o driver, acesse o diretório do driver e execute:"
-    echo "sudo make uninstall"
-}
-
-# Executar função principal
-main
+echo "${BLUE}To remove the driver, download the repository again and run: sudo make uninstall${RESET}"
