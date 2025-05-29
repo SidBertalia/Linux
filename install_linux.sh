@@ -131,7 +131,7 @@ fi
 
 # 4. Install and configure Git (and SSH key)
 if [ -f ./install_git.sh ]; then
-    if ! ./install_git.sh; then
+	if ! ./install_git.sh; then
         echo "${RED}${BOLD}Error installing/configuring Git.${RESET}"; exit 1
     fi
     CURRENT_STEP=$((CURRENT_STEP + 1)); update_progress $CURRENT_STEP $TOTAL_STEPS
@@ -167,6 +167,14 @@ if [ -f ./install_flatpack_apps.sh ]; then
         echo "${RED}${BOLD}Error installing Flatpak Apps.${RESET}"; exit 1
     fi
     CURRENT_STEP=$((CURRENT_STEP + 1)); update_progress $CURRENT_STEP $TOTAL_STEPS
+fi
+
+# 9. Install Pop OS Tilting
+if [ -f ./install_tiling.sh ]; then
+	if ! ./install_tiling.sh; then
+		echo "${RED}${BOLD}Error installing Pop Shell Tilting.${RESET}"; exit 1
+	fi
+	CURRENT_STEP=$((CURRENT_STEP + 1)); update_progress $CURRENT_STEP $TOTAL_STEPS
 fi
 
 ################################################################
