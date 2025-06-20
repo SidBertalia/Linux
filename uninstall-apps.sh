@@ -1,57 +1,67 @@
 #!/bin/bash
 
-# Função para remover um aplicativo específico
+# --- Color variables ---
+if [ -z "$BOLD" ]; then
+    BOLD=$(tput bold)
+    RED=$(tput setaf 1)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    BLUE=$(tput setaf 4)
+    RESET=$(tput sgr0)
+fi
+
+# Function to remove a specific app
 remove_app() {
     local APP_NAME="$1"
     echo ""
-    echo "🔍 Procurando e removendo '$APP_NAME'..."
+    echo "${BLUE}${BOLD}🔍 Searching and removing '$APP_NAME'...${RESET}"
 
-    # --- 1. Remoção via APT ---
+    # --- 1. APT removal ---
     if apt list --installed 2>/dev/null | grep -qi "$APP_NAME"; then
-        echo "📦 Encontrado via APT. Remover?"
-        select yn in "Sim" "Não"; do
+        echo "${YELLOW}📦 Found via APT. Remove?${RESET}"
+        select yn in "Yes" "No"; do
             case $yn in
-                Sim )
+                Yes )
                     sudo apt purge "$APP_NAME" -y
                     sudo apt autoremove -y
                     break;;
-                Não ) break;;
+                No ) break;;
             esac
         done
     fi
 
-    # --- 2. Remoção via Snap ---
+    # --- 2. Snap removal ---
     if snap list 2>/dev/null | grep -qi "$APP_NAME"; then
-        echo "🦊 Encontrado via Snap. Remover?"
-        select yn in "Sim" "Não"; do
+        echo "${YELLOW}🦊 Found via Snap. Remove?${RESET}"
+        select yn in "Yes" "No"; do
             case $yn in
-                Sim )
+                Yes )
                     sudo snap remove --purge "$APP_NAME"
                     break;;
-                Não ) break;;
+                No ) break;;
             esac
         done
     fi
 
-    # --- 3. Remoção via Flatpak ---
+    # --- 3. Flatpak removal ---
     if flatpak list 2>/dev/null | grep -qi "$APP_NAME"; then
-        echo "📦 Encontrado via Flatpak. Remover?"
-        select yn in "Sim" "Não"; do
+        echo "${YELLOW}📦 Found via Flatpak. Remove?${RESET}"
+        select yn in "Yes" "No"; do
             case $yn in
-                Sim )
+                Yes )
                     flatpak uninstall --delete-data "$APP_NAME" -y
                     break;;
-                Não ) break;;
+                No ) break;;
             esac
         done
     fi
 
-    # --- 4. Limpeza de arquivos residuais ---
-    echo "🧹 Buscar arquivos residuais de '$APP_NAME'? (Ícones, configurações, etc.)"
-    select yn in "Sim" "Não"; do
+    # --- 4. Residual files cleanup ---
+    echo "${YELLOW}🧹 Search for residual files of '$APP_NAME'? (Icons, configs, etc.)${RESET}"
+    select yn in "Yes" "No"; do
         case $yn in
-            Sim )
-                echo "Limpando..."
+            Yes )
+                echo "${BLUE}Cleaning...${RESET}"
                 sudo find /usr/share/applications/ ~/.local/share/applications/ -iname "*$APP_NAME*.desktop" -delete
                 sudo find /usr/share/icons/ ~/.local/share/icons/ -iname "*$APP_NAME*" -delete
                 sudo find ~/.config/ ~/.cache/ -iname "*$APP_NAME*" -exec rm -rf {} +
@@ -59,27 +69,27 @@ remove_app() {
                 sudo update-desktop-database
                 sudo update-mime-database /usr/share/mime
                 break;;
-            Não ) break;;
+            No ) break;;
         esac
     done
 
-    echo "✅ Concluído para '$APP_NAME'!"
-    echo "─────────────────────────────────────"
+    echo "${GREEN}✅ Completed for '$APP_NAME'!${RESET}"
+    echo "${GRAY}─────────────────────────────────────${RESET}"
 }
 
-# --- Menu principal ---
-echo "🛠️  DESINSTALADOR DE APPS (APT/Snap/Flatpak) 🛠️"
-echo "─────────────────────────────────────"
+# --- Main menu ---
+echo "${BLUE}${BOLD}🛠️  APP UNINSTALLER (APT/Snap/Flatpak) 🛠️${RESET}"
+echo "${GRAY}─────────────────────────────────────${RESET}"
 
-# Pergunta quantos apps serão removidos
-read -p "Quantos aplicativos deseja remover? " NUM_APPS
+# Ask how many apps to remove
+read -p "How many apps do you want to remove? " NUM_APPS
 
-# Loop para cada app
+# Loop for each app
 for (( i=1; i<=$NUM_APPS; i++ )); do
-    read -p "Digite o nome do aplicativo #$i: " APP_NAME
+    read -p "Enter name of app #$i: " APP_NAME
     remove_app "$APP_NAME"
 done
 
 echo ""
-echo "🎉 Todos os aplicativos foram processados!"
-echo "Dica: Reinicie o sistema para garantir que todas as alterações tenham efeito."
+echo "${GREEN}🎉 All apps have been processed!${RESET}"
+echo "${YELLOW}Tip: Reboot the system to ensure all changes take effect.${RESET}"

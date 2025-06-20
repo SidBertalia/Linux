@@ -1,17 +1,36 @@
 #!/bin/bash
 
-# Import functions and variables from main script if running standalone
+# Cedilla Fix Script for Ubuntu (Xorg and Wayland/GTK4)
+# This script must be run as root (sudo).
+#
+# Options:
+#   - Xorg: modifies system files and sets environment variables via /etc/profile.d
+#   - Wayland/GTK4: sets variables in /etc/environment, creates ~/.XCompose, and sets GTK4 input method
+#
+# Use the Xorg method for Xorg sessions, and the Wayland/GTK4 method for modern GNOME/GTK4/Wayland sessions.
+#
+# WARNING: This script makes system-wide changes. Always run as root and make backups if necessary.
+
+# --- Color variables ---
 if [ -z "$BOLD" ]; then
     BOLD=$(tput bold)
     RED=$(tput setaf 1)
     GREEN=$(tput setaf 2)
     YELLOW=$(tput setaf 3)
     BLUE=$(tput setaf 4)
-    GRAY=$(tput setaf 7)
     RESET=$(tput sgr0)
 fi
 
-# Function to display a progress bar
+# --- Require root ---
+if [[ $EUID -ne 0 ]]; then
+    echo "${RED}${BOLD}This script must be run as root (sudo).${RESET}"
+    exit 1
+fi
+
+# --- Check dependencies ---
+command -v gsettings >/dev/null 2>&1 || { echo >&2 "${YELLOW}Warning: gsettings not found. GTK4 features may not work.${RESET}"; }
+
+# --- Progress bar ---
 show_progress() {
     local progress=$1
     local total=$2
@@ -23,14 +42,13 @@ show_progress() {
     printf "\r[%s%s] %d%%" "${bar:0:filled_length}" "${empty:filled_length}" "$percent"
 }
 
-# Paths of the files to be modified
+# --- Paths ---
 files=(
     "/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules.cache"
     "/usr/lib/x86_64-linux-gnu/gtk-2.0/2.10.0/immodules.cache"
 )
 backup_suffix=".fix_cedilha.bak"
 
-# Check if the system is 32-bit and adjust paths if necessary
 if [ "$(uname -m)" != "x86_64" ]; then
     files=(
         "/usr/lib/i386-linux-gnu/gtk-3.0/3.0.0/immodules.cache"
@@ -38,24 +56,27 @@ if [ "$(uname -m)" != "x86_64" ]; then
     )
 fi
 
-# Path to the Compose file
 compose_file="/usr/share/X11/locale/en_US.UTF-8/Compose"
 compose_backup="${compose_file}${backup_suffix}"
 
-# Function to install the fix
+environment_file="/etc/environment"
+environment_backup="${environment_file}${backup_suffix}"
+user_compose_file="$HOME/.XCompose"
+user_compose_backup="${user_compose_file}${backup_suffix}"
+
+# --- Xorg fix ---
 install_fix_cedilha() {
-    echo "${YELLOW}${BOLD}Applying cedilla fix...${RESET}"
+    echo "${YELLOW}${BOLD}Applying Cedilla Fix for Xorg...${RESET}"
     total_files=${#files[@]}
     for i in "${!files[@]}"; do
         file="${files[$i]}"
         backup="${file}${backup_suffix}"
         if [ -f "$file" ]; then
-            # Backup if it doesn't exist yet
             if [ ! -f "$backup" ]; then
-                sudo cp "$file" "$backup"
+                cp "$file" "$backup"
             fi
-            sudo sed -i 's/"cedilla" "Cedilla" "gtk20" "\/usr\/share\/locale" "az:ca:co:fr:gv:oc:pt:sq:tr:wa"/"cedilla" "Cedilla" "gtk20" "\/usr\/share\/locale" "az:ca:co:fr:gv:oc:pt:sq:tr:wa:en"/' "$file"
-            echo "File $file successfully modified."
+            # If you want to force cedilla for en, add the sed line here.
+            echo "File $file successfully checked and backed up."
         else
             echo "File $file not found."
         fi
@@ -63,41 +84,39 @@ install_fix_cedilha() {
     done
     echo
 
-    # Backup and modify the Compose file
-    echo "Backing up and modifying the Compose file..."
+    echo "Backing up and modifying Compose file..."
     if [ -f "$compose_file" ]; then
         if [ ! -f "$compose_backup" ]; then
-            sudo cp "$compose_file" "$compose_backup"
+            cp "$compose_file" "$compose_backup"
         fi
         tmp_compose=$(mktemp)
         sed 's/ć/ç/g' < "$compose_file" | sed 's/Ć/Ç/g' > "$tmp_compose"
-        sudo mv "$tmp_compose" "$compose_file"
+        mv "$tmp_compose" "$compose_file"
         echo "Compose file successfully modified."
     else
         echo "Compose file not found."
     fi
 
-    # Add environment variables to /etc/environment if not already present
-    echo "Adding environment variables to /etc/environment..."
-    for var in GTK_IM_MODULE QT_IM_MODULE; do
-        if ! grep -q "^${var}=cedilla" /etc/environment; then
-            sudo bash -c "echo \"${var}=cedilla\" >> /etc/environment"
-        fi
-    done
-    echo "Environment variables added successfully."
+    echo "Creating environment variable script in /etc/profile.d/..."
+    cat <<'EOF' > /etc/profile.d/99-cedilla-fix.sh
+#!/bin/sh
+export GTK_IM_MODULE=cedilla
+export QT_IM_MODULE=cedilla
+EOF
+    chmod +x /etc/profile.d/99-cedilla-fix.sh
+    echo "Environment variable script created successfully."
 
-    echo "${GREEN}${BOLD}Cedilla fix applied. Please reboot your computer for the changes to take effect.${RESET}"
+    echo "${GREEN}${BOLD}Cedilla Fix for Xorg applied. Please reboot for changes to take effect.${RESET}"
 }
 
-# Function to uninstall the fix
 uninstall_fix_cedilha() {
-    echo "${YELLOW}${BOLD}Restoring cedilla backups...${RESET}"
+    echo "${YELLOW}${BOLD}Restoring Cedilla Fix for Xorg...${RESET}"
     total_files=${#files[@]}
     for i in "${!files[@]}"; do
         file="${files[$i]}"
         backup="${file}${backup_suffix}"
         if [ -f "$backup" ]; then
-            sudo cp "$backup" "$file"
+            cp "$backup" "$file"
             echo "File $file restored from backup."
         else
             echo "Backup for $file not found, not restored."
@@ -106,22 +125,108 @@ uninstall_fix_cedilha() {
     done
     echo
 
-    # Restore Compose
     if [ -f "$compose_backup" ]; then
-        sudo cp "$compose_backup" "$compose_file"
+        cp "$compose_backup" "$compose_file"
         echo "Compose file restored from backup."
     else
-        echo "Backup for Compose file not found, not restored."
+        echo "Backup for Compose not found, not restored."
     fi
 
-    # Remove environment variables
-    echo "Removing environment variables from /etc/environment..."
-    sudo sed -i '/^GTK_IM_MODULE=cedilla/d' /etc/environment
-    sudo sed -i '/^QT_IM_MODULE=cedilla/d' /etc/environment
-    echo "Environment variables removed successfully."
+    echo "Removing environment variable script from /etc/profile.d/..."
+    if [ -f "/etc/profile.d/99-cedilla-fix.sh" ]; then
+        rm "/etc/profile.d/99-cedilla-fix.sh"
+    fi
+    echo "Environment variable script removed successfully."
 
-    echo "${GREEN}${BOLD}Cedilla fix uninstalled. Please reboot your computer for the changes to take effect.${RESET}"
+    echo "${GREEN}${BOLD}Cedilla Fix for Xorg uninstalled. Please reboot for changes to take effect.${RESET}"
 }
 
-# Main logic for install_linux.sh: always apply the fix (no menu)
-install_fix_cedilha
+# --- Wayland/GTK4 fix ---
+apply_alternative_fix() {
+    echo "${YELLOW}${BOLD}Applying Cedilla Fix for Wayland/GTK4...${RESET}"
+
+    if [ -f "$environment_file" ] && [ ! -f "$environment_backup" ]; then
+        cp "$environment_file" "$environment_backup"
+    fi
+
+    if ! grep -q "GTK_IM_MODULE=cedilla" "$environment_file"; then
+        echo "GTK_IM_MODULE=cedilla" >> "$environment_file"
+    fi
+    if ! grep -q "QT_IM_MODULE=cedilla" "$environment_file"; then
+        echo "QT_IM_MODULE=cedilla" >> "$environment_file"
+    fi
+    echo "/etc/environment updated."
+
+    if [ -f "$user_compose_file" ] && [ ! -f "$user_compose_backup" ]; then
+        cp "$user_compose_file" "$user_compose_backup"
+    fi
+
+    cat > "$user_compose_file" <<EOF
+# UTF-8 (Unicode) compose sequences
+
+# Overrides C acute with Ccedilla:
+<dead_acute> <C> : "Ç" "Ccedilla"
+<dead_acute> <c> : "ç" "ccedilla"
+EOF
+    echo ".XCompose created/updated at $user_compose_file."
+
+    # Use the original user for gsettings if available
+    user=${SUDO_USER:-$USER}
+    if command -v gsettings >/dev/null 2>&1; then
+        sudo -u "$user" gsettings set org.gnome.settings-daemon.plugins.xsettings overrides "{'Gtk/IMModule': <'ibus'>}"
+        echo "GTK4 configuration applied via gsettings."
+    fi
+
+    echo "${GREEN}${BOLD}Cedilla Fix for Wayland/GTK4 applied. Log out or reboot for changes to take effect.${RESET}"
+}
+
+restore_alternative_fix() {
+    echo "${YELLOW}${BOLD}Restoring Cedilla Fix for Wayland/GTK4...${RESET}"
+
+    if [ -f "$environment_backup" ]; then
+        cp "$environment_backup" "$environment_file"
+        echo "/etc/environment restored."
+    fi
+
+    if [ -f "$user_compose_backup" ]; then
+        cp "$user_compose_backup" "$user_compose_file"
+        echo ".XCompose restored."
+    else
+        rm -f "$user_compose_file"
+        echo ".XCompose removed."
+    fi
+
+    user=${SUDO_USER:-$USER}
+    if command -v gsettings >/dev/null 2>&1; then
+        sudo -u "$user" gsettings reset org.gnome.settings-daemon.plugins.xsettings overrides
+        echo "GTK4 configuration restored."
+    fi
+
+    echo "${GREEN}${BOLD}Cedilla Fix for Wayland/GTK4 uninstalled. Log out or reboot for changes to take effect.${RESET}"
+}
+
+# --- Menu ---
+show_menu() {
+    while true; do
+        echo
+        echo "${BLUE}${BOLD}Cedilla Fix for Xorg${RESET}"
+        echo "  1 - Install"
+        echo "  2 - Uninstall"
+        echo "${BLUE}${BOLD}Cedilla Fix for Wayland/GTK4${RESET}"
+        echo "  3 - Install"
+        echo "  4 - Uninstall"
+        echo "  5 - Exit"
+        echo
+        read -p "Choose an option: " opt
+        case $opt in
+            1) install_fix_cedilha ;;
+            2) uninstall_fix_cedilha ;;
+            3) apply_alternative_fix ;;
+            4) restore_alternative_fix ;;
+            5) echo "Exiting script."; break ;;
+            *) echo "${RED}Invalid option${RESET}" ;;
+        esac
+    done
+}
+
+# ---

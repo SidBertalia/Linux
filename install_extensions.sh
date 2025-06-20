@@ -2,14 +2,13 @@
 
 set -e
 
-# Import functions and variables from main script if running standalone
+# Color variables and helpers
 if [ -z "$BOLD" ]; then
     BOLD=$(tput bold)
     RED=$(tput setaf 1)
     GREEN=$(tput setaf 2)
     YELLOW=$(tput setaf 3)
     BLUE=$(tput setaf 4)
-    GRAY=$(tput setaf 7)
     RESET=$(tput sgr0)
 
     is_installed() {
@@ -39,8 +38,7 @@ fi
 # DEPENDENCY INSTALLATION
 ##########################################################
 
-# Verify and install basic dependencies
-REQUIRED_TOOLS=(wget unzip)
+REQUIRED_TOOLS=(wget unzip gnome-extensions)
 for tool in "${REQUIRED_TOOLS[@]}"; do
     if ! is_installed "$tool"; then
         echo "${YELLOW}${BOLD}Installing $tool...${RESET}"
@@ -53,92 +51,65 @@ for tool in "${REQUIRED_TOOLS[@]}"; do
 done
 
 ##########################################################
-# GNOME SHELL EXTENSIONS INSTALLATION
+# EXTENSIONS TO INSTALL (UUIDs)
 ##########################################################
 
-# Install gnome-shell-extensions package if not already installed
-if ! is_installed gnome-shell-extensions; then
-    if ask_confirmation "Do you want to install gnome-shell-extensions?"; then
-        echo "${YELLOW}${BOLD}Installing gnome-shell-extensions...${RESET}"
-        if [ "$PACKAGE_MANAGER" == "apt" ]; then
-            sudo apt-get install -y gnome-shell-extensions
-        elif [ "$PACKAGE_MANAGER" == "dnf" ]; then
-            sudo dnf install -y gnome-shell-extensions
-        fi
-        echo "${GREEN}gnome-shell-extensions installed successfully.${RESET}"
-    else
-        echo "${RED}${BOLD}Skipping gnome-shell-extensions installation.${RESET}"
-        exit 1
-    fi
-else
-    echo "${GREEN}gnome-shell-extensions is already installed.${RESET}"
-fi
-
-##########################################################
-# GNOME EXTENSIONS FROM GITHUB
-##########################################################
-
-EXTENSIONS=(
-    "https://github.com/acristoffers/gnome-rectangle/archive/master.zip"
-    "https://github.com/eonpatapon/gnome-shell-extension-caffeine/archive/master.zip"
-    "https://github.com/cliffniff/media-controls/archive/master.zip"
-    "https://github.com/RedSoftwareSystems/easy_docker_containers/archive/master.zip"
-    "https://github.com/GSConnect/gnome-shell-extension-gsconnect/archive/master.zip"
-    "https://github.com/marcinjahn/gnome-dim-completed-calendar-events-extension/archive/master.zip"
-    "https://github.com/jiggak/notification-icons/archive/master.zip"
-    "https://github.com/meghprkh/force-quit/archive/master.zip"
-    "https://github.com/CleoMenezesJr/weather-oclock/archive/master.zip"
-    "https://github.com/Noobsai/fullscreen-avoider/archive/master.zip"
-    "https://github.com/F-i-f/tweaks-system-menu/archive/master.zip"
-    "https://github.com/aunetx/blur-my-shell/archive/master.zip"
-    "https://gitlab.gnome.org/GNOME/gnome-shell-extensions/-/archive/master/gnome-shell-extensions-master.zip"
-    "https://github.com/axxapy/gnome-ui-tune/archive/master.zip"
-    "https://github.com/qwreey/quick-settings-tweaks/archive/master.zip"
-    "https://github.com/hermes83/compiz-alike-magic-lamp-effect/archive/master.zip"
+EXTENSIONS_UUIDS=(
+    rectangle@acristoffers.me
+    caffeine@patapon.info
+    mediacontrols@cliffniff.github.com
+    easy_docker_containers@red.software.systems
+    dim-completed-calendar-events@marcinjahn.com
+    fq@megh
+    weatheroclock@CleoMenezesJr.github.io
+    fullscreen-avoider@noobsai.github.com
+    tweaks-system-menu@extensions.gnome-shell.fifi.org
+    blur-my-shell@aunetx
+    user-theme@gnome-shell-extensions.gcampax.github.com
+    gnome-ui-tune@itstime.tech
+    quick-settings-tweaks@qwreey
+    compiz-alike-magic-lamp-effect@hermes83.github.com
+    search-light@icedman.github.com
+    top-bar-organizer@julian.gse.jsts.xyz
+    notification-position@drugo.dev
+    drive-menu@gnome-shell-extensions.gcampax.github.com
+    Bluetooth-Battery-Meter@maniacx.github.com
+    notifications-alert-on-user-menu@hackedbellini.gmail.com
+    ding@rastersoft.com
+    ubuntu-appindicators@ubuntu.com
+    ubuntu-dock@ubuntu.com
 )
 
-# Create extensions directory if it doesn't exist
-mkdir -p ~/.local/share/gnome-shell/extensions
+##########################################################
+# INSTALL EXTENSIONS FROM GNOME EXTENSIONS WEBSITE
+##########################################################
 
-TEMP_DIR=$(mktemp -d)
-for EXTENSION in "${EXTENSIONS[@]}"; do
-    echo "${YELLOW}${BOLD}Installing $EXTENSION...${RESET}"
-    wget "$EXTENSION" -O "$TEMP_DIR/extension.zip"
-    unzip "$TEMP_DIR/extension.zip" -d "$TEMP_DIR"
-
-    # Try to find and properly install the extension
-    EXTENSION_DIR=$(find "$TEMP_DIR" -maxdepth 2 -type f -name "metadata.json" -exec dirname {} \; | head -n 1)
-    if [ -n "$EXTENSION_DIR" ]; then
-        UUID=$(grep -Po '(?<="uuid": ")[^"]*' "$EXTENSION_DIR/metadata.json")
-        if [ -n "$UUID" ]; then
-            mv "$EXTENSION_DIR" "$HOME/.local/share/gnome-shell/extensions/$UUID"
-            echo "${BLUE}Extension installed with UUID: $UUID${RESET}"
-        else
-            echo "${RED}Failed to find UUID in metadata.json${RESET}"
-        fi
+# Function to install extension by UUID using gnome-extensions CLI or fallback to gnome-shell-extension-installer
+install_gnome_extension() {
+    local uuid="$1"
+    echo "${YELLOW}${BOLD}Installing $uuid...${RESET}"
+    # Try with gnome-shell-extension-installer if available
+    if is_installed gnome-shell-extension-installer; then
+        gnome-shell-extension-installer --yes "$uuid"
     else
-        echo "${RED}Failed to find extension directory in downloaded files${RESET}"
+        # Try with gnome-extensions CLI (requires extension to be available in repo)
+        echo "${RED}gnome-shell-extension-installer not found. Please install it for automatic installation.${RESET}"
+        echo "${YELLOW}You can install it with:${RESET} sudo wget -O /usr/local/bin/gnome-shell-extension-installer https://raw.githubusercontent.com/brunelli/gnome-shell-extension-installer/master/gnome-shell-extension-installer && sudo chmod +x /usr/local/bin/gnome-shell-extension-installer"
     fi
+}
 
-    rm -rf "$TEMP_DIR"/*
+for uuid in "${EXTENSIONS_UUIDS[@]}"; do
+    install_gnome_extension "$uuid"
 done
-rm -rf "$TEMP_DIR"
 
 echo "${GREEN}GNOME extensions installed successfully.${RESET}"
 
-# Restart GNOME Shell to detect new extensions
-echo "${YELLOW}Restarting GNOME Shell...${RESET}"
-busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s 'Meta.restart("Restarting...")'
-
 # Enable all installed extensions
 echo "${YELLOW}Enabling extensions...${RESET}"
-for EXTENSION_DIR in ~/.local/share/gnome-shell/extensions/*; do
-    if [ -f "$EXTENSION_DIR/metadata.json" ]; then
-        UUID=$(basename "$EXTENSION_DIR")
-        if gnome-extensions list | grep -q "$UUID"; then
-            gnome-extensions enable "$UUID"
-            echo "${BLUE}Enabled extension: $UUID${RESET}"
-        fi
+for uuid in "${EXTENSIONS_UUIDS[@]}"; do
+    if gnome-extensions list | grep -q "$uuid"; then
+        gnome-extensions enable "$uuid"
+        echo "${BLUE}Enabled extension: $uuid${RESET}"
     fi
 done
 
